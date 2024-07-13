@@ -8,9 +8,9 @@
 </textarea>
 <br>
 <button id="update-button">Update and Play from beginning</button>
+<button id="next-button">Next Video</button>
 
 <script id="youtube-tracking-script">
-
     var playList = [
         {
             videoId: 'dBK0gKW61NU',
@@ -57,7 +57,10 @@
         });
     });
 
-    
+    var nextButton = document.getElementById('next-button');
+    nextButton.addEventListener('click', function(event) {
+        loadNextVideo();
+    });
 
     var tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
@@ -94,21 +97,25 @@
             console.log("YouTube Video is PAUSED!!");
         }
 
-        // after loading next video, before startin the next one, one extra end event will be passed,
-        // so need this debouncing logic
-        if ( debouncing )
-            return;
-        if ( event.data == YT.PlayerState.ENDED ) {
+        if (debouncing) return;
+        if (event.data == YT.PlayerState.ENDED) {
             debouncing = true;
             console.log("YouTube Video is ENDING!!");
-            currentId++;
-            if ( playList[currentId] ) {
-                player.loadVideoById({
-                    'videoId': playList[currentId].videoId,
-                    'startSeconds': playList[currentId].start,
-                    'endSeconds': playList[currentId].end
-                });
-            }
+            loadNextVideo();
+        }
+    }
+
+    function loadNextVideo() {
+        currentId++;
+        if (playList[currentId]) {
+            player.loadVideoById({
+                'videoId': playList[currentId].videoId,
+                'startSeconds': playList[currentId].start,
+                'endSeconds': playList[currentId].end
+            });
+        } else {
+            currentId = 0;  // Optionally, reset to the beginning or handle the end of the playlist.
+            console.log("End of playlist reached.");
         }
     }
 </script>
