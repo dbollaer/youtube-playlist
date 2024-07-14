@@ -1,123 +1,245 @@
+<!DOCTYPE html>
 <html>
+<head>
+    <title>YouTube Playlist Player</title>
+</head>
 <body>
 <a href="https://github.com/cytsunny/youtube-playlist/">Github Repository</a>
 <br>
 <div id="video-youtube"></div>
 <br>
-<textarea id="playlist-object" rows="20" cols="70">
-</textarea>
+<textarea id="playlist-object" rows="20" cols="70"></textarea>
 <br>
-<button id="update-button">Update and Play from beginning</button>
+<input type="text" id="new-video-link" placeholder="Enter YouTube link">
+<button id="add-video-button">Add Video</button>
+<br>
+<button id="update-button">Update Playlist</button>
+<button id="update-and-start-end-button">Update & Start from End</button>
+<button id="previous-button">Previous Video (from start)</button>
+<button id="previous-end-button">Previous Video (2 seconds before end)</button>
 <button id="next-button">Next Video</button>
 
 <script id="youtube-tracking-script">
-    var playList = [
-        {
-            videoId: 'dBK0gKW61NU',
-            start: 222,
-            end: 224
-        },
-        {
-            videoId: 'LtCfuHLrixY',
-            start: 210,
-            end: 213
-        },
-        {
-            videoId: 'pU_nCvEq_Y4',
-            start: 18526,
-            end: 18529
-        },
-        {
-            videoId: 'EHpxi7khHb0',
-            start: 3008,
-            end: 3010
-        }
-    ];
+  var playList = [];
+  var currentId = 0;
 
-    var textarea = document.getElementById('playlist-object');
-    textarea.value = JSON.stringify(playList);
+  function getPlaylistFromURL() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var playlistParam = urlParams.get('playlist');
+    if (playlistParam) {
+      try {
+        return JSON.parse(decodeURIComponent(playlistParam));
+      } catch (e) {
+        alert('Error parsing playlist from URL.');
+        return [];
+      }
+    }
+    return
+      [{videoId:"oYFXrJIfQeM",start:0,end:300},{videoId:"Nng3lxm5vnY",start:1,end:141},{videoId:"24iwjocEWng",start:66,end:170},{videoId:"g_JSed3pLh8",start:14,end:170},{videoId:"Tcfjo3g_gj0",start:154,end:170},{videoId:"AG3wBzbig_U",start:0,end:120},{videoId:"7qjg2REKN2o",start:18,end:178},{videoId:"bODKlDMdSI8",start:8,end:177},{videoId:"OHFfnKLm_Kg",start:56,end:180},{videoId:"uWS_LcTQlCs",start:180,end:300},{videoId:"kchvkg31uLI",start:7,end:300}] ;
+  }
 
-    var currentId = 0;
+  function updateURLWithPlaylist() {
+    var playlistParam = encodeURIComponent(JSON.stringify(playList));
+    var newURL = window.location.protocol + "//" + window.location.host + window.location.pathname + '?playlist=' + playlistParam;
+    window.history.replaceState({path: newURL}, '', newURL);
+  }
 
-    var updateButton = document.getElementById('update-button');
-    updateButton.addEventListener('click', function(event) {
-        var playListString = document.getElementById('playlist-object').value;
-        try {
-            playList = JSON.parse(playListString);
-        }
-        catch (exception) {
-            alert('JSON format error. Please check your input and try again.')
-            return;
-        }
-        currentId = 0;
+  playList = getPlaylistFromURL();
+  var textarea = document.getElementById('playlist-object');
+  textarea.value = formatPlaylist(playList);
+
+  var updateButton = document.getElementById('update-button');
+  updateButton.addEventListener('click', function (event) {
+    var playListString = document.getElementById('playlist-object').value;
+    try {
+      playList = JSON.parse(playListString.replace(/(\w+):/g, '"$1":'));
+    } catch (exception) {
+      alert('JSON format error. Please check your input and try again.');
+      return;
+    }
+    // current one is the last one
+    currentId = playList.length - 1;
+    updateURLWithPlaylist();
+    player.loadVideoById({
+      'videoId': playList[currentId].videoId,
+      'startSeconds': playList[currentId].start,
+      'endSeconds': playList[currentId].end
+    });
+  });
+
+  var updateAndStartEndButton = document.getElementById('update-and-start-end-button');
+  updateAndStartEndButton.addEventListener('click', function (event) {
+    var playListString = document.getElementById('playlist-object').value;
+    try {
+      playList = JSON.parse(playListString.replace(/(\w+):/g, '"$1":'));
+    } catch (exception) {
+      alert('JSON format error. Please check your input and try again.');
+      return;
+    }
+    currentId = playList.length - 1; // Start from the end
+    updateURLWithPlaylist();
+    player.loadVideoById({
+      'videoId': playList[currentId].videoId,
+      'startSeconds': playList[currentId].start,
+      'endSeconds': playList[currentId].end
+    });
+  });
+
+  var nextButton = document.getElementById('next-button');
+  nextButton.addEventListener('click', function (event) {
+    loadNextVideo();
+    updatePlaylistTextarea();
+  });
+
+  var previousButton = document.getElementById('previous-button');
+  previousButton.addEventListener('click', function (event) {
+    loadPreviousVideoFromStart();
+    updatePlaylistTextarea();
+  });
+
+  var previousEndButton = document.getElementById('previous-end-button');
+  previousEndButton.addEventListener('click', function (event) {
+    loadPreviousVideoFromEnd();
+    updatePlaylistTextarea();
+  });
+
+  var addVideoButton = document.getElementById('add-video-button');
+  addVideoButton.addEventListener('click', function (event) {
+    addVideoToPlaylist();
+    updatePlaylistTextarea();
+  });
+
+  var tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  var firstScriptTag = document.getElementById("youtube-tracking-script");
+  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+  var player;
+
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('video-youtube', {
+      height: '500px',
+      width: '1000px',
+      videoId: playList[0].videoId,
+      playerVars: {
+        'autoplay': 0,
+        'start': playList[0].start,
+        'end': playList[0].end
+      },
+      events: {
+        'onStateChange': videoPlay
+      }
+    });
+  }
+
+  var debouncing = false;
+
+  function videoPlay(event) {
+    if (event.data == YT.PlayerState.PLAYING) {
+      debouncing = false;
+      console.log("YouTube Video is PLAYING!!");
+    }
+    if (event.data == YT.PlayerState.PAUSED) {
+      console.log("YouTube Video is PAUSED!!");
+    }
+
+    if (debouncing) return;
+    if (event.data == YT.PlayerState.ENDED) {
+      debouncing = true;
+      console.log("YouTube Video is ENDING!!");
+      loadNextVideo();
+      updatePlaylistTextarea();
+    }
+  }
+
+  function loadNextVideo() {
+    currentId++;
+    if (playList[currentId]) {
+      player.loadVideoById({
+        'videoId': playList[currentId].videoId,
+        'startSeconds': playList[currentId].start,
+        'endSeconds': playList[currentId].end
+      });
+      updateURLWithPlaylist();
+    } else {
+      currentId = 0;  // Optionally, reset to the beginning or handle the end of the playlist.
+      console.log("End of playlist reached.");
+    }
+  }
+
+  function loadPreviousVideoFromStart() {
+    currentId--;
+    if (currentId < 0) {
+      currentId = 0; // If we're at the start of the playlist, stay on the first video.
+    }
+
+    if (playList[currentId]) {
+      var previousVideo = playList[currentId];
+      player.loadVideoById({
+        'videoId': previousVideo.videoId,
+        'startSeconds': previousVideo.start,
+        'endSeconds': previousVideo.end
+      });
+      updateURLWithPlaylist();
+    } else {
+      console.log("No previous video.");
+    }
+  }
+
+  function loadPreviousVideoFromEnd() {
+    currentId--;
+    if (currentId < 0) {
+      currentId = 0; // If we're at the start of the playlist, stay on the first video.
+    }
+
+    if (playList[currentId]) {
+      var previousVideo = playList[currentId];
+      var startSeconds = Math.max(previousVideo.end - 2, previousVideo.start); // Start 2 seconds before the end, but not before the start
+      player.loadVideoById({
+        'videoId': previousVideo.videoId,
+        'startSeconds': startSeconds,
+        'endSeconds': previousVideo.end
+      });
+      updateURLWithPlaylist();
+    } else {
+      console.log("No previous video.");
+    }
+  }
+
+  function addVideoToPlaylist() {
+    var newVideoLink = document.getElementById('new-video-link').value;
+    var videoIdMatch = newVideoLink.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/);
+    if (videoIdMatch && videoIdMatch[1]) {
+      var newVideoId = videoIdMatch[1];
+      playList.push({
+        videoId: newVideoId,
+        start: 0,
+        end: 180 // Default to a 5-minute video. Adjust as needed.
+      });
+      document.getElementById('new-video-link').value = ''; // Clear the input field
+      updateURLWithPlaylist();
+      // Play the last 2 seconds of the previous video
+      if (playList.length > 1) {
+        currentId = playList.length - 2;
+        var previousVideo = playList[currentId];
+        var startSeconds = Math.max(previousVideo.end - 2, previousVideo.start);
         player.loadVideoById({
-            'videoId': playList[currentId].videoId,
-            'startSeconds': playList[currentId].start,
-            'endSeconds': playList[currentId].end
+          'videoId': previousVideo.videoId,
+          'startSeconds': startSeconds,
+          'endSeconds': previousVideo.end
         });
-    });
-
-    var nextButton = document.getElementById('next-button');
-    nextButton.addEventListener('click', function(event) {
-        loadNextVideo();
-    });
-
-    var tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-
-    var firstScriptTag = document.getElementById("youtube-tracking-script");
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-    var player;
-
-    function onYouTubeIframeAPIReady() {
-        player = new YT.Player('video-youtube', {
-            height: '500px',
-            width: '1000px',
-            videoId: playList[0].videoId,
-            playerVars: {
-                'autoplay': 0,
-                'start': playList[0].start,
-                'end': playList[0].end
-            },
-            events: {
-                'onStateChange': videoPlay
-            }
-        });
+      }
+      updatePlaylistTextarea();
+    } else {
+      alert('Invalid YouTube link. Please enter a valid link.');
     }
+  }
 
-    var debouncing = false;
+  function updatePlaylistTextarea() {
+    textarea.value = formatPlaylist(playList);
+  }
 
-    function videoPlay(event) {
-        if (event.data == YT.PlayerState.PLAYING) {
-            debouncing = false;
-            console.log("YouTube Video is PLAYING!!");
-        }
-        if (event.data == YT.PlayerState.PAUSED) {
-            console.log("YouTube Video is PAUSED!!");
-        }
-
-        if (debouncing) return;
-        if (event.data == YT.PlayerState.ENDED) {
-            debouncing = true;
-            console.log("YouTube Video is ENDING!!");
-            loadNextVideo();
-        }
-    }
-
-    function loadNextVideo() {
-        currentId++;
-        if (playList[currentId]) {
-            player.loadVideoById({
-                'videoId': playList[currentId].videoId,
-                'startSeconds': playList[currentId].start,
-                'endSeconds': playList[currentId].end
-            });
-        } else {
-            currentId = 0;  // Optionally, reset to the beginning or handle the end of the playlist.
-            console.log("End of playlist reached.");
-        }
-    }
+  function formatPlaylist(playlist) {
+    return JSON.stringify(playlist).replace(/\"([^(\")"]+)\":/g, "$1:");
+  }
 </script>
-</body>
-</html>
